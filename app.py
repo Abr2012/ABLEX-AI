@@ -1,6 +1,7 @@
 
 import streamlit as st
 from google import genai
+from streamlit_mic_recorder import speech_to_text
 
 st.set_page_config(
     page_title="ABLEX AI",
@@ -41,7 +42,6 @@ h1 {
     background: linear-gradient(90deg, #35c9ff, #a66cff);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    font-size: 55px !important;
 }
 [data-testid="stChatMessage"] {
     background: #172442;
@@ -66,14 +66,10 @@ with st.sidebar:
 
     selected_language = st.selectbox(
         "🌍 Response language",
-        LANGUAGES,
-        index=0
+        LANGUAGES
     )
 
-    st.caption(
-        "Auto Detect lets ABLEX AI identify the language "
-        "of your message."
-    )
+    st.caption("Choose Auto Detect to reply in your message language.")
 
     if st.button("🗑️ Clear Conversation"):
         st.session_state.messages = []
@@ -81,16 +77,16 @@ with st.sidebar:
 
     st.divider()
     st.write("🌐 100 language choices")
-    st.write("✨ ABLEX AI Version 3.0")
+    st.write("✨ ABLEX AI Version 4.0")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "voice_text" not in st.session_state:
+    st.session_state.voice_text = ""
+
 st.markdown("### Welcome to ABLEX AI")
-st.write(
-    "Ask questions, learn new things, explore ideas, "
-    "or chat in your preferred language."
-)
+st.write("Ask questions, learn, explore ideas, and chat in your language.")
 
 col1, col2, col3 = st.columns(3)
 
@@ -107,23 +103,41 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Chat input and microphone
+chat_col, mic_col = st.columns([9, 1])
 
-prompt = st.chat_input("Message ABLEX AI...")
+with chat_col:
+    typed_prompt = st.chat_input("Message ABLEX AI...")
 
-st.markdown("### 🎤 Voice Assistant")
-
-audio_data = st.audio_input("Record your question")
-
-if audio_data is not None:
-    st.audio(audio_data)
-
-    st.info(
-        "Recording received! Voice transcription will be added "
-        "in the next step."
+with mic_col:
+    st.write("")
+    st.write("")
+    voice_result = speech_to_text(
+        language="en",
+        start_prompt="🎤",
+        stop_prompt="⏹️",
+        just_once=True,
+        key="voice_input"
     )
 
+if voice_result:
+    st.session_state.voice_text = voice_result
 
-if prompt:
+if st.session_state.voice_text:
+    st.info("🎤 Recognized speech: " + st.session_state.voice_text)
+
+    if st.button("Send voice message"):
+        st.session_state.pending_prompt = st.session_state.voice_text
+        st.session_state.voice_text = ""
+        st.rerun()
+
+if typed_prompt:
+    st.session_state.pending_prompt = typed_prompt
+
+if "pending_prompt" in st.session_state:
+    prompt = st.session_state.pending_prompt
+    del st.session_state.pending_prompt
+
     st.session_state.messages.append({
         "role": "user",
         "content": prompt
@@ -142,16 +156,13 @@ if prompt:
 
             if selected_language == "Auto Detect":
                 language_instruction = (
-                    "Automatically identify the language of the "
-                    "user's latest message. Reply in that same language. "
-                    "If the message contains multiple languages, "
-                    "use the main language."
+                    "Detect the language of the latest user message "
+                    "and reply in that same language."
                 )
             else:
                 language_instruction = (
-                    f"Reply in {selected_language}. "
-                    "Understand the user's message even if it is "
-                    "written in another language."
+                    f"Reply in {selected_language}, even if the "
+                    "user writes in another language."
                 )
 
             conversation = []
@@ -170,17 +181,15 @@ if prompt:
                         contents=conversation,
                         config={
                             "system_instruction": (
-                                "You are ABLEX AI, a friendly, "
-                                "intelligent and responsible AI assistant. "
-                                "Give clear, helpful and accurate answers. "
+                                "You are ABLEX AI, a friendly, intelligent "
+                                "and responsible AI assistant. Give clear, "
+                                "helpful and accurate answers. "
                                 + language_instruction
                             )
                         }
                     )
 
-                    answer = response.text or (
-                        "Sorry, I couldn't generate a response."
-                    )
+                    answer = response.text or "Please try again."
                     st.markdown(answer)
 
             st.session_state.messages.append({
@@ -189,7 +198,7 @@ if prompt:
             })
 
         except Exception as e:
-            st.error("Sorry, ABLEX AI could not respond. Please try again.")
+            st.error("ABLEX AI could not respond. Please try again.")
             st.caption(str(e))
             st.session_state.messages.pop()
 
