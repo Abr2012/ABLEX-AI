@@ -107,7 +107,21 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+
 prompt = st.chat_input("Message ABLEX AI...")
+
+st.markdown("### 🎤 Voice Assistant")
+
+audio_data = st.audio_input("Record your question")
+
+if audio_data is not None:
+    st.audio(audio_data)
+
+    st.info(
+        "Recording received! Voice transcription will be added "
+        "in the next step."
+    )
+
 
 if prompt:
     st.session_state.messages.append({
