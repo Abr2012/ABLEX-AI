@@ -1,8 +1,9 @@
 
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit_mic_recorder import speech_to_text
 from google import genai
-import json
+from pathlib import Path
 
 st.set_page_config(
     page_title="ABLEX AI",
@@ -11,6 +12,12 @@ st.set_page_config(
 )
 
 MODEL = "gemini-3.5-flash-lite"
+
+# Connect the local browser voice component
+live_voice_component = components.declare_component(
+    "ablex_live_voice",
+    path=str(Path(__file__).parent / "ablex_voice")
+)
 
 LANGUAGES = [
     "Auto Detect", "English", "Tamil", "Hindi", "Malayalam",
@@ -35,6 +42,28 @@ LANGUAGES = [
     "Swedish", "Tajik", "Tatar", "Ukrainian"
 ]
 
+SPEECH_CODES = {
+    "English": "en-IN",
+    "Tamil": "ta-IN",
+    "Hindi": "hi-IN",
+    "Malayalam": "ml-IN",
+    "Telugu": "te-IN",
+    "Kannada": "kn-IN",
+    "Bengali": "bn-IN",
+    "Marathi": "mr-IN",
+    "Gujarati": "gu-IN",
+    "Punjabi": "pa-IN",
+    "Urdu": "ur-PK",
+    "Spanish": "es-ES",
+    "French": "fr-FR",
+    "German": "de-DE",
+    "Italian": "it-IT",
+    "Japanese": "ja-JP",
+    "Korean": "ko-KR",
+    "Chinese": "zh-CN",
+    "Arabic": "ar-SA"
+}
+
 st.markdown("""
 <style>
 .stApp {
@@ -56,14 +85,19 @@ h1,h2,h3,p,label {
 st.title("🤖 ABLEX AI")
 st.caption("Your multilingual AI assistant")
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# Session state
+defaults = {
+    "messages": [],
+    "last_voice": "",
+    "voice_answer": "",
+    "live_answer": "",
+    "live_answer_id": 0,
+    "last_live_event_id": None
+}
 
-if "last_voice" not in st.session_state:
-    st.session_state.last_voice = ""
-
-if "voice_answer" not in st.session_state:
-    st.session_state.voice_answer = ""
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 with st.sidebar:
     st.header("⚙️ Settings")
@@ -73,7 +107,11 @@ with st.sidebar:
         st.session_state.messages = []
         st.session_state.last_voice = ""
         st.session_state.voice_answer = ""
+        st.session_state.live_answer = ""
+        st.session_state.live_answer_id = 0
+        st.session_state.last_live_event_id = None
         st.rerun()
+
 
 def ask_ablex():
     api_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -87,6 +125,7 @@ def ask_ablex():
         instruction = f"Reply in {language}."
 
     contents = []
+
     for message in st.session_state.messages[-12:]:
         contents.append({
             "role": "user" if message["role"] == "user" else "model",
@@ -95,6 +134,7 @@ def ask_ablex():
 
     try:
         client = genai.Client(api_key=api_key)
+
         response = client.models.generate_content(
             model=MODEL,
             contents=contents,
@@ -105,14 +145,18 @@ def ask_ablex():
                 "max_output_tokens": 700
             }
         )
+
         return response.text or "I couldn't generate a response."
+
     except Exception as error:
         return f"Gemini error: {error}"
 
+
 def send_question(question):
     question = question.strip()
+
     if not question:
-        return
+        return ""
 
     st.session_state.messages.append({
         "role": "user",
@@ -128,13 +172,21 @@ def send_question(question):
 
     return answer
 
+
 mode = st.radio(
     "Choose your mode",
-    ["💬 Text Chat", "🎙️ ABLEX Voice"],
+    [
+        "💬 Text Chat",
+        "🎙️ ABLEX Voice",
+        "🔴 ABLEX Live Voice"
+    ],
     horizontal=True
 )
 
+
+# TEXT CHAT
 if mode == "💬 Text Chat":
+
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -144,9 +196,13 @@ if mode == "💬 Text Chat":
     if prompt:
         with st.spinner("ABLEX is thinking..."):
             send_question(prompt)
+
         st.rerun()
 
-else:
+
+# ORIGINAL ONE-TURN VOICE MODE
+elif mode == "🎙️ ABLEX Voice":
+
     st.subheader("🎙️ Talk to ABLEX AI")
     st.write("Tap the microphone, speak, and wait for transcription.")
 
@@ -172,11 +228,14 @@ else:
                 answer = send_question(st.session_state.last_voice)
                 st.session_state.voice_answer = answer
                 st.session_state.last_voice = ""
+
             st.rerun()
 
     if st.session_state.voice_answer:
         st.subheader("🤖 ABLEX's reply")
         st.write(st.session_state.voice_answer)
+
+        import json
 
         speech_text = json.dumps(st.session_state.voice_answer)
         speech_language = "en-IN"
@@ -185,13 +244,10 @@ else:
             f"""
             <script>
             const answer = {speech_text};
-            const speak = () => {{
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(answer);
-                utterance.lang = {json.dumps(speech_language)};
-                window.speechSynthesis.speak(utterance);
-            }};
-            speak();
+            const utterance = new SpeechSynthesisUtterance(answer);
+            utterance.lang = {json.dumps(speech_language)};
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utterance);
             </script>
             """,
             height=0
@@ -201,5 +257,50 @@ else:
             st.session_state.voice_answer = ""
             st.rerun()
 
+
+# NEW LIVE VOICE MODE
+else:
+
+    st.subheader("🔴 ABLEX Live Voice")
+    st.write(
+        "Start a conversation. ABLEX will answer aloud and "
+        "attempt to listen again after each answer."
+    )
+
+    speech_language = SPEECH_CODES.get(language, "en-IN")
+
+    voice_result = live_voice_component(
+        answer=st.session_state.live_answer,
+        answer_id=st.session_state.live_answer_id,
+        speech_language=speech_language,
+        key="ablex_live_component"
+    )
+
+    if isinstance(voice_result, dict):
+        spoken_question = voice_result.get("text", "").strip()
+        event_id = voice_result.get("event_id")
+
+        if (
+            spoken_question
+            and event_id is not None
+            and event_id != st.session_state.last_live_event_id
+        ):
+            st.session_state.last_live_event_id = event_id
+
+            with st.spinner("🤖 ABLEX is thinking..."):
+                answer = send_question(spoken_question)
+
+            st.session_state.live_answer = answer
+            st.session_state.live_answer_id += 1
+
+            st.rerun()
+
+    st.divider()
+
+    st.subheader("💬 Conversation")
+
+    for message in st.session_state.messages[-12:]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
 
