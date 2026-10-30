@@ -2,160 +2,156 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from google import genai
+import html
 import json
 
+# ---------------- APP CONFIG ----------------
 st.set_page_config(
     page_title="ABLEX AI",
     page_icon="🤖",
-    layout="wide"
+    layout="centered"
 )
+
+MODEL = "gemini-3.5-flash-lite"
 
 LANGUAGES = [
     "Auto Detect", "English", "Tamil", "Hindi", "Malayalam",
     "Telugu", "Kannada", "Bengali", "Marathi", "Gujarati",
-    "Punjabi", "Urdu", "Odia", "Assamese", "Nepali",
-    "Sinhala", "Arabic", "French", "Spanish", "German",
-    "Italian", "Portuguese", "Russian", "Japanese", "Korean",
-    "Chinese", "Thai", "Vietnamese", "Indonesian", "Malay",
-    "Turkish", "Dutch", "Greek", "Hebrew", "Persian",
-    "Swahili", "Afrikaans", "Albanian", "Amharic", "Armenian",
-    "Azerbaijani", "Basque", "Belarusian", "Bosnian", "Bulgarian",
-    "Burmese", "Catalan", "Croatian", "Czech", "Danish",
-    "Estonian", "Filipino", "Finnish", "Georgian", "Haitian Creole",
-    "Hausa", "Hungarian", "Icelandic", "Igbo", "Irish",
+    "Punjabi", "Urdu", "Odia", "Assamese", "Sanskrit",
+    "Spanish", "French", "German", "Italian", "Portuguese",
+    "Russian", "Japanese", "Korean", "Chinese", "Arabic",
+    "Turkish", "Dutch", "Greek", "Hebrew", "Thai",
+    "Vietnamese", "Indonesian", "Malay", "Filipino", "Swahili",
+    "Afrikaans", "Albanian", "Amharic", "Armenian", "Azerbaijani",
+    "Basque", "Belarusian", "Bosnian", "Bulgarian", "Burmese",
+    "Catalan", "Cebuano", "Chichewa", "Corsican", "Croatian",
+    "Czech", "Danish", "Esperanto", "Estonian", "Finnish",
+    "Frisian", "Galician", "Georgian", "Haitian Creole", "Hausa",
+    "Hawaiian", "Hungarian", "Icelandic", "Igbo", "Irish",
     "Javanese", "Kazakh", "Khmer", "Kinyarwanda", "Kurdish",
-    "Kyrgyz", "Lao", "Latvian", "Lithuanian", "Luxembourgish",
-    "Macedonian", "Malagasy", "Maltese", "Mongolian", "Oromo",
-    "Pashto", "Polish", "Romanian", "Serbian", "Slovak",
-    "Slovenian", "Somali", "Sundanese", "Swedish", "Tajik",
-    "Tatar", "Tibetan", "Turkmen", "Ukrainian", "Uzbek",
-    "Welsh", "Wolof", "Xhosa", "Yoruba", "Zulu",
-    "Māori", "Samoan", "Tongan", "Quechua", "Galician"
+    "Kyrgyz", "Lao", "Latin", "Latvian", "Lithuanian",
+    "Luxembourgish", "Macedonian", "Malagasy", "Maltese", "Maori",
+    "Mongolian", "Nepali", "Norwegian", "Pashto", "Persian",
+    "Polish", "Romanian", "Serbian", "Sesotho", "Shona",
+    "Sindhi", "Sinhala", "Slovak", "Slovenian", "Somali",
+    "Sundanese", "Swedish", "Tajik", "Tatar", "Ukrainian"
 ]
 
+# ---------------- DESIGN ----------------
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(135deg, #080d20, #111b38);
+    background: linear-gradient(135deg,#080d20,#17113a,#080d20);
     color: white;
 }
-h1 {
-    background: linear-gradient(90deg, #35c9ff, #a66cff);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-[data-testid="stChatMessage"] {
-    background: #172442;
-    border-radius: 15px;
-    padding: 12px;
+h1, h2, h3, p, label {
+    color: white !important;
 }
 .stButton button {
-    background: linear-gradient(90deg, #168cff, #8755ff);
-    color: white;
-    border: none;
     border-radius: 12px;
-    font-weight: bold;
+    border: 1px solid #765cff;
+    background: #292052;
+    color: white;
+    min-height: 42px;
+}
+.stTextInput input, .stTextArea textarea {
+    background: #171b35;
+    color: white;
 }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🤖 ABLEX AI")
-st.caption("Your intelligent multilingual AI assistant")
+st.caption("Your multilingual AI assistant")
 
-with st.sidebar:
-    st.header("⚙️ Settings")
-    selected_language = st.selectbox(
-        "🌍 Response language",
-        LANGUAGES
-    )
-
-    st.divider()
-    st.write("✨ ABLEX AI LIVE")
-    st.write("🌐 100 language choices")
-
-    if st.button("🗑️ Clear Conversation"):
-        st.session_state.messages = []
-        st.rerun()
-
+# ---------------- SESSION STATE ----------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+if "voice_question" not in st.session_state:
+    st.session_state.voice_question = ""
 
 if "voice_answer" not in st.session_state:
     st.session_state.voice_answer = ""
 
-if "voice_language" not in st.session_state:
-    st.session_state.voice_language = "en-US"
+# ---------------- SIDEBAR ----------------
+with st.sidebar:
+    st.header("⚙️ Settings")
 
-st.markdown("### Welcome to ABLEX AI")
-st.write("Chat by typing or try ABLEX LIVE voice mode.")
+    language = st.selectbox(
+        "Response language",
+        LANGUAGES,
+        index=0
+    )
 
-mode = st.radio(
-    "Choose your mode",
-    ["Text Chat", "🎙️ ABLEX LIVE"],
-    horizontal=True
-)
+    if st.button("🗑️ Clear conversation"):
+        st.session_state.messages = []
+        st.session_state.voice_question = ""
+        st.session_state.voice_answer = ""
+        st.rerun()
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    st.caption("ABLEX AI | Voice Prototype")
 
+# ---------------- GEMINI ----------------
 def ask_ablex(prompt):
     api_key = st.secrets.get("GEMINI_API_KEY", "")
 
     if not api_key:
-        st.error("Gemini API key is missing. Check Streamlit Secrets.")
-        return
+        return "Gemini API key is missing. Add GEMINI_API_KEY in Streamlit Secrets."
 
     try:
         client = genai.Client(api_key=api_key)
 
-        if selected_language == "Auto Detect":
+        if language == "Auto Detect":
             language_instruction = (
-                "Detect the language of the user's latest message "
-                "and reply in that same language."
+                "Reply in the same language as the user's latest message."
             )
         else:
             language_instruction = (
-                f"Reply in {selected_language}."
+                f"Reply in {language}. Keep your answer clear and helpful."
             )
 
-        conversation = []
-        for msg in st.session_state.messages[-12:]:
-            role = "user" if msg["role"] == "user" else "model"
-            conversation.append({
+        history = []
+        for message in st.session_state.messages[-12:]:
+            role = "user" if message["role"] == "user" else "model"
+            history.append({
                 "role": role,
-                "parts": [{"text": msg["content"]}]
+                "parts": [{"text": message["content"]}]
             })
 
         response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
-            contents=conversation,
+            model=MODEL,
+            contents=history,
             config={
                 "system_instruction": (
-                    "You are ABLEX AI, a friendly, intelligent and "
-                    "responsible AI assistant. Give clear and accurate "
-                    "answers. " + language_instruction
-                )
+                    "You are ABLEX AI, a friendly and helpful multilingual "
+                    "AI assistant. Give accurate, clear answers. "
+                    + language_instruction
+                ),
+                "max_output_tokens": 700
             }
         )
 
-        answer = response.text or "Sorry, please try again."
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": answer
-        })
-
-        return answer
+        return response.text or "I couldn't generate a response. Please try again."
 
     except Exception as error:
-        st.error("ABLEX AI could not respond. Please try again.")
-        st.caption(str(error))
-        return None
+        return f"AI error: {error}"
 
+# ---------------- CHAT DISPLAY ----------------
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-if mode == "Text Chat":
-    prompt = st.chat_input("Message ABLEX AI...")
+# ---------------- MODES ----------------
+mode = st.radio(
+    "Choose your mode",
+    ["💬 Text Chat", "🎙️ ABLEX Voice"],
+    horizontal=True
+)
+
+# ---------------- TEXT CHAT ----------------
+if mode == "💬 Text Chat":
+    prompt = st.chat_input("Ask ABLEX AI anything...")
 
     if prompt:
         st.session_state.messages.append({
@@ -163,105 +159,97 @@ if mode == "Text Chat":
             "content": prompt
         })
 
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
         with st.chat_message("assistant"):
-            with st.spinner("ABLEX AI is thinking..."):
+            with st.spinner("ABLEX is thinking..."):
                 answer = ask_ablex(prompt)
-                if answer:
-                    st.markdown(answer)
+            st.markdown(answer)
 
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer
+        })
+
+        st.rerun()
+
+# ---------------- VOICE MODE ----------------
 else:
-    st.markdown("### 🎙️ ABLEX LIVE VOICE")
-    st.write(
-        "Press Start Listening, speak your question, and ABLEX AI "
-        "will answer aloud automatically."
-    )
+    st.subheader("🎙️ Talk to ABLEX AI")
+    st.write("Tap the microphone, speak, and submit your question.")
 
     components.html("""
     <div style="
-        background:#172442;
+        background:#171b35;
         padding:22px;
-        border-radius:18px;
+        border-radius:16px;
         text-align:center;
         color:white;
         font-family:Arial;
     ">
-      <div style="font-size:42px;">🎙️</div>
-      <h3>ABLEX LIVE</h3>
-      <p id="status">Ready to listen</p>
       <button id="start" style="
-        background:linear-gradient(90deg,#168cff,#8755ff);
-        color:white;border:0;padding:13px 22px;
-        border-radius:12px;font-size:16px;cursor:pointer;">
-        Start Listening
-      </button>
-      <button id="stop" style="
-        background:#b83250;color:white;border:0;
-        padding:13px 22px;border-radius:12px;
-        font-size:16px;cursor:pointer;margin-left:8px;">
-        Stop
-      </button>
-      <p id="heard" style="margin-top:18px;"></p>
-      <p style="font-size:12px;color:#b9c6df;">
-        Your browser may ask for microphone permission.
+        background:#6545df;
+        color:white;
+        border:0;
+        border-radius:50px;
+        padding:16px 28px;
+        font-size:17px;
+        cursor:pointer;
+      ">🎙️ Start speaking</button>
+
+      <p id="status" style="margin-top:15px">
+        Microphone is ready.
       </p>
+
+      <p id="result" style="
+        background:#252344;
+        padding:12px;
+        border-radius:10px;
+        min-height:35px;
+        overflow-wrap:anywhere;
+      ">Your speech will appear here.</p>
+
+      <button id="send" style="
+        background:#16856b;
+        color:white;
+        border:0;
+        border-radius:10px;
+        padding:12px 22px;
+        font-size:15px;
+        cursor:pointer;
+      ">Send voice question</button>
     </div>
 
     <script>
-    const statusText = document.getElementById("status");
-    const heardText = document.getElementById("heard");
     const startButton = document.getElementById("start");
-    const stopButton = document.getElementById("stop");
+    const sendButton = document.getElementById("send");
+    const statusText = document.getElementById("status");
+    const resultText = document.getElementById("result");
+
+    let transcript = "";
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    let recognition;
-    let listening = false;
-
-    function speak(text) {
-      if (!("speechSynthesis" in window)) {
-        statusText.innerText = "Speech output is not supported.";
-        return;
-      }
-
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "en-US";
-      utterance.onend = () => {
-        if (listening) {
-          statusText.innerText =
-            "Reply finished. Press Start Listening for your next question.";
-        }
-      };
-      window.speechSynthesis.speak(utterance);
-    }
-
     if (!SpeechRecognition) {
       statusText.innerText =
-        "Speech recognition is unavailable in this browser.";
+        "Speech recognition is not supported. Try Google Chrome.";
       startButton.disabled = true;
     } else {
-      recognition = new SpeechRecognition();
-      recognition.lang = "en-US";
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-IN";
       recognition.continuous = false;
       recognition.interimResults = false;
 
-      recognition.onstart = () => {
-        statusText.innerText = "Listening...";
+      startButton.onclick = () => {
+        transcript = "";
+        resultText.innerText = "Listening...";
+        statusText.innerText = "Speak now...";
+        recognition.start();
       };
 
       recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        heardText.innerText = "You said: " + transcript;
-        statusText.innerText =
-          "Your question was heard. Send it in the chat below.";
-        window.parent.postMessage({
-          type: "ABLEX_VOICE_TEXT",
-          text: transcript
-        }, "*");
+        transcript = event.results[0][0].transcript;
+        resultText.innerText = transcript;
+        statusText.innerText = "Speech recognized. Press Send.";
       };
 
       recognition.onerror = (event) => {
@@ -269,70 +257,80 @@ else:
       };
 
       recognition.onend = () => {
-        if (listening) {
-          statusText.innerText =
-            "Listening stopped. Press Start Listening again.";
+        if (!transcript) {
+          statusText.innerText = "Listening ended. Try again.";
         }
       };
 
-      startButton.onclick = () => {
-        listening = true;
-        try {
-          recognition.start();
-        } catch (e) {
-          statusText.innerText = "Please try starting again.";
+      sendButton.onclick = () => {
+        if (!transcript.trim()) {
+          statusText.innerText = "Please speak first.";
+          return;
         }
-      };
 
-      stopButton.onclick = () => {
-        listening = false;
-        recognition.stop();
-        window.speechSynthesis.cancel();
-        statusText.innerText = "Voice mode stopped.";
+        const url = new URL(window.parent.location.href);
+        url.searchParams.set("voice_question", transcript);
+        window.parent.location.href = url.toString();
       };
     }
     </script>
-    """, height=300)
+    """, height=270)
 
-    st.info(
-        "Voice mode prototype: speech recognition happens in the browser. "
-        "The recognized question must still be submitted to Gemini by the "
-        "Streamlit app. This embedded interface does not yet connect that "
-        "browser event to the Python chat automatically."
-    )
+    # Streamlit receives the question through the URL query parameter.
+    received_question = st.query_params.get("voice_question", "")
 
-    voice_prompt = st.text_input(
-        "Your recognized voice question",
-        key="voice_question"
-    )
+    if received_question:
+        st.session_state.voice_question = received_question
+        st.query_params.clear()
 
-    if st.button("Send voice question"):
-        if voice_prompt.strip():
+    if st.session_state.voice_question:
+        st.write("**Recognized question:**")
+        st.info(st.session_state.voice_question)
+
+        if st.button("🤖 Ask ABLEX AI", key="ask_voice"):
+            question = st.session_state.voice_question
+
             st.session_state.messages.append({
                 "role": "user",
-                "content": voice_prompt
+                "content": question
             })
 
-            with st.spinner("ABLEX AI is thinking..."):
-                answer = ask_ablex(voice_prompt)
+            with st.spinner("ABLEX is thinking..."):
+                answer = ask_ablex(question)
 
-            if answer:
-                st.session_state.voice_answer = answer
-                st.markdown("### ABLEX AI says")
-                st.write(answer)
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": answer
+            })
 
-                components.html(
-                    """
-                    <script>
-                    const answer = %s;
-                    const utterance =
-                        new SpeechSynthesisUtterance(answer);
-                    utterance.lang = "en-US";
-                    window.speechSynthesis.cancel();
-                    window.speechSynthesis.speak(utterance);
-                    </script>
-                    """ % json.dumps(answer),
-                    height=0
-                )
+            st.session_state.voice_answer = answer
+            st.session_state.voice_question = ""
+            st.rerun()
+
+    if st.session_state.voice_answer:
+        st.subheader("🤖 ABLEX's answer")
+        st.markdown(st.session_state.voice_answer)
+
+        # Browser speech synthesis
+        speech_text = json.dumps(st.session_state.voice_answer)
+        speech_language = "en-IN" if language == "Auto Detect" else "en-IN"
+
+        components.html(
+            f"""
+            <script>
+            const textToSpeak = {speech_text};
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            utterance.lang = {json.dumps(speech_language)};
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utterance);
+            </script>
+            """,
+            height=20
+        )
+
+        if st.button("🔁 Clear voice answer"):
+            st.session_state.voice_answer = ""
+            st.rerun()
+
 
 
