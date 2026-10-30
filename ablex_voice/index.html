@@ -3,64 +3,80 @@
 <head>
   <meta charset="UTF-8">
   <script src="https://unpkg.com/streamlit-component-lib@1.4.0/dist/index.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      color: white;
+      background: #17113a;
+    }
+    button {
+      padding: 12px;
+      margin: 5px;
+      border-radius: 10px;
+      border: 1px solid #765cff;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
   <h3>🎙️ ABLEX Live Voice</h3>
-  <p id="status">Ready</p>
+  <p id="status">Ready to start</p>
   <button id="start">▶ Start Conversation</button>
   <button id="stop" disabled>⏹ Stop Conversation</button>
   <p id="transcript"></p>
+  <p id="reply"></p>
 
   <script>
     const Streamlit = window.Streamlit;
     const status = document.getElementById("status");
     const transcript = document.getElementById("transcript");
-    const start = document.getElementById("start");
-    const stop = document.getElementById("stop");
+    const reply = document.getElementById("reply");
+    const startButton = document.getElementById("start");
+    const stopButton = document.getElementById("stop");
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    let recognition;
+    let recognition = null;
     let active = false;
-    let restarting = false;
+    let waitingForAnswer = false;
+    let speaking = false;
+    let lastAnswerId = 0;
 
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.lang = "en-IN";
-      recognition.continuous = true;
+      recognition.continuous = false;
       recognition.interimResults = false;
 
       recognition.onstart = () => {
         status.textContent = "🎙️ Listening...";
-        restarting = false;
       };
 
       recognition.onresult = (event) => {
-        const result = event.results[event.results.length - 1];
-        if (!result.isFinal) return;
+        const text = event.results[0][0].transcript.trim();
 
-        const text = result[0].transcript.trim();
-        if (!text) return;
+        if (text) {
+          waitingForAnswer = true;
+          transcript.textContent = "You: " + text;
+          status.textContent = "🤖 Sending to ABLEX...";
+          recognition.stop();
 
-        transcript.textContent = "You: " + text;
-
-        Streamlit.setComponentValue({
-          text: text,
-          event_id: Date.now()
-        });
+          Streamlit.setComponentValue({
+            text: text,
+            event_id: Date.now()
+          });
+        }
       };
 
       recognition.onend = () => {
-        if (active && !restarting) {
-          restarting = true;
+        if (active && !waitingForAnswer && !speaking) {
           setTimeout(() => {
-            if (active) {
+            if (active && !waitingForAnswer && !speaking) {
               try {
                 recognition.start();
               } catch (error) {
-                status.textContent = "Restarting microphone...";
-                restarting = false;
+                status.textContent = "Preparing microphone...";
               }
             }
           }, 500);
@@ -71,27 +87,77 @@
         status.textContent = "Microphone error: " + event.error;
       };
 
-      start.onclick = () => {
+      startButton.onclick = () => {
         active = true;
-        start.disabled = true;
-        stop.disabled = false;
-        recognition.start();
+        waitingForAnswer = false;
+        startButton.disabled = true;
+        stopButton.disabled = false;
+
+        try {
+          recognition.start();
+        } catch (error) {
+          status.textContent = "Please try starting again.";
+        }
       };
 
-      stop.onclick = () => {
+      stopButton.onclick = () => {
         active = false;
+        waitingForAnswer = false;
+        speaking = false;
         recognition.stop();
-        start.disabled = false;
-        stop.disabled = true;
+        window.speechSynthesis.cancel();
+
+        startButton.disabled = false;
+        stopButton.disabled = true;
         status.textContent = "Conversation stopped.";
       };
     } else {
-      status.textContent = "Speech recognition is unavailable. Try Chrome.";
-      start.disabled = true;
+      status.textContent = "Please use Google Chrome.";
+      startButton.disabled = true;
     }
 
+    function handleRender(event) {
+      const args = event.detail.args || {};
+      const answer = args.answer || "";
+      const answerId = args.answer_id || 0;
+      const speechLanguage = args.speech_language || "en-IN";
+
+      if (answer && answerId !== lastAnswerId) {
+        lastAnswerId = answerId;
+        reply.textContent = "ABLEX: " + answer;
+
+        if (active) {
+          waitingForAnswer = false;
+          speaking = true;
+          window.speechSynthesis.cancel();
+
+          const utterance = new SpeechSynthesisUtterance(answer);
+          utterance.lang = speechLanguage;
+
+          utterance.onend = () => {
+            speaking = false;
+            if (active) {
+              status.textContent = "🎙️ Listening for your next question...";
+              try {
+                recognition.start();
+              } catch (error) {
+                status.textContent = "Please restart listening.";
+              }
+            }
+          };
+
+          window.speechSynthesis.speak(utterance);
+        }
+      }
+    }
+
+    Streamlit.events.addEventListener(
+      Streamlit.RENDER_EVENT,
+      handleRender
+    );
+
     Streamlit.setComponentReady();
-    Streamlit.setFrameHeight(200);
+    Streamlit.setFrameHeight(230);
   </script>
 </body>
 </html>
