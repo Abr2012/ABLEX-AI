@@ -8,152 +8,175 @@ st.set_page_config(
     layout="wide"
 )
 
-# FUTURISTIC DESIGN
+LANGUAGES = [
+    "Auto Detect", "English", "Tamil", "Hindi", "Malayalam",
+    "Telugu", "Kannada", "Bengali", "Marathi", "Gujarati",
+    "Punjabi", "Urdu", "Odia", "Assamese", "Nepali",
+    "Sinhala", "Arabic", "French", "Spanish", "German",
+    "Italian", "Portuguese", "Russian", "Japanese", "Korean",
+    "Chinese", "Thai", "Vietnamese", "Indonesian", "Malay",
+    "Turkish", "Dutch", "Greek", "Hebrew", "Persian",
+    "Swahili", "Afrikaans", "Albanian", "Amharic", "Armenian",
+    "Azerbaijani", "Basque", "Belarusian", "Bosnian", "Bulgarian",
+    "Burmese", "Catalan", "Croatian", "Czech", "Danish",
+    "Estonian", "Filipino", "Finnish", "Georgian", "Haitian Creole",
+    "Hausa", "Hungarian", "Icelandic", "Igbo", "Irish",
+    "Javanese", "Kazakh", "Khmer", "Kinyarwanda", "Kurdish",
+    "Kyrgyz", "Lao", "Latvian", "Lithuanian", "Luxembourgish",
+    "Macedonian", "Malagasy", "Maltese", "Mongolian", "Oromo",
+    "Pashto", "Polish", "Romanian", "Serbian", "Slovak",
+    "Slovenian", "Somali", "Sundanese", "Swedish", "Tajik",
+    "Tatar", "Tibetan", "Turkmen", "Ukrainian", "Uzbek",
+    "Welsh", "Wolof", "Xhosa", "Yoruba", "Zulu",
+    "Māori", "Samoan", "Tongan", "Quechua", "Galician"
+]
+
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(135deg, #080d1c, #11152b);
-    color: #ffffff;
+    background: linear-gradient(135deg, #080d20, #111b38);
+    color: white;
 }
-[data-testid="stSidebar"] {
-    background: #10162b;
-}
-.main-title {
-    font-size: 48px;
-    font-weight: 900;
-    background: linear-gradient(90deg, #00d4ff, #a855f7);
+h1 {
+    background: linear-gradient(90deg, #35c9ff, #a66cff);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    font-size: 55px !important;
 }
-.subtitle {
-    color: #aab5d0;
-    font-size: 17px;
+[data-testid="stChatMessage"] {
+    background: #172442;
+    border-radius: 15px;
+    padding: 12px;
 }
-div.stButton > button {
-    background: linear-gradient(90deg, #087cff, #8b42e8);
+.stButton button {
+    background: linear-gradient(90deg, #168cff, #8755ff);
     color: white;
     border: none;
     border-radius: 12px;
-    padding: 10px 20px;
+    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# HEADER
-st.markdown(
-    '<div class="main-title">✦ ABLEX AI</div>',
-    unsafe_allow_html=True
-)
-st.markdown(
-    '<div class="subtitle">Your intelligent universe starts here.</div>',
-    unsafe_allow_html=True
-)
+st.title("🤖 ABLEX AI")
+st.caption("Your intelligent multilingual AI assistant")
 
-st.write("")
-
-# API CONNECTION
-try:
-    api_key = st.secrets.get("GEMINI_API_KEY", "")
-except Exception:
-    api_key = ""
-
-if not api_key:
-    st.error("Gemini API key is missing. Check Streamlit Secrets.")
-    st.stop()
-
-client = genai.Client(api_key=api_key)
-
-# CHAT MEMORY
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# SIDEBAR
 with st.sidebar:
-    st.markdown("## ✦ ABLEX AI")
-    st.caption("FUTURE INTELLIGENCE")
+    st.header("⚙️ Settings")
 
-    st.divider()
+    selected_language = st.selectbox(
+        "🌍 Response language",
+        LANGUAGES,
+        index=0
+    )
 
-    st.markdown("### Navigation")
-    st.write("💬 AI Chat")
-    st.write("🧠 Smart Assistant")
-    st.write("🌐 Languages")
-    st.write("⚙️ Settings")
+    st.caption(
+        "Auto Detect lets ABLEX AI identify the language "
+        "of your message."
+    )
 
-    st.divider()
-
-    if st.button("🗑️ Clear Conversation", use_container_width=True):
+    if st.button("🗑️ Clear Conversation"):
         st.session_state.messages = []
         st.rerun()
 
-    st.caption("ABLEX AI • Version 2.0")
+    st.divider()
+    st.write("🌐 100 language choices")
+    st.write("✨ ABLEX AI Version 3.0")
 
-# WELCOME SCREEN
-if not st.session_state.messages:
-    st.markdown("## Welcome to ABLEX AI 👋")
-    st.write("What would you like to explore today?")
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    col1, col2, col3 = st.columns(3)
+st.markdown("### Welcome to ABLEX AI")
+st.write(
+    "Ask questions, learn new things, explore ideas, "
+    "or chat in your preferred language."
+)
 
-    with col1:
-        st.info("📚 Learning\n\nExplore new topics.")
-    with col2:
-        st.info("💡 Ideas\n\nDiscover creative ideas.")
-    with col3:
-        st.info("💻 Coding\n\nLearn programming.")
+col1, col2, col3 = st.columns(3)
 
-# DISPLAY CHAT HISTORY
+with col1:
+    st.info("📚 Learning\n\nUnderstand difficult topics.")
+
+with col2:
+    st.info("💡 Ideas\n\nExplore creative ideas.")
+
+with col3:
+    st.info("💻 Coding\n\nLearn programming.")
+
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# USER INPUT
-question = st.chat_input("Ask ABLEX AI anything...")
+prompt = st.chat_input("Message ABLEX AI...")
 
-if question:
+if prompt:
     st.session_state.messages.append({
         "role": "user",
-        "content": question
+        "content": prompt
     })
 
     with st.chat_message("user"):
-        st.markdown(question)
+        st.markdown(prompt)
 
-    with st.chat_message("assistant"):
-        with st.spinner("✦ ABLEX AI is thinking..."):
-            try:
-                conversation = []
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
 
-                for msg in st.session_state.messages[-11:]:
-                    role = "user" if msg["role"] == "user" else "model"
-                    conversation.append({
-                        "role": role,
-                        "parts": [{"text": msg["content"]}]
-                    })
+    if not api_key:
+        st.error("Gemini API key is missing. Check Streamlit Secrets.")
+    else:
+        try:
+            client = genai.Client(api_key=api_key)
 
-                response = client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
-                    contents=conversation,
-                    config={
-                        "system_instruction": (
-                            "You are ABLEX AI, a friendly, intelligent "
-                            "and responsible AI assistant. Give clear, "
-                            "helpful and accurate answers."
-                        )
-                    }
+            if selected_language == "Auto Detect":
+                language_instruction = (
+                    "Automatically identify the language of the "
+                    "user's latest message. Reply in that same language. "
+                    "If the message contains multiple languages, "
+                    "use the main language."
+                )
+            else:
+                language_instruction = (
+                    f"Reply in {selected_language}. "
+                    "Understand the user's message even if it is "
+                    "written in another language."
                 )
 
-                answer = response.text or "I couldn't generate a response."
-                st.markdown(answer)
+            conversation = []
 
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": answer
+            for msg in st.session_state.messages[-12:]:
+                role = "user" if msg["role"] == "user" else "model"
+                conversation.append({
+                    "role": role,
+                    "parts": [{"text": msg["content"]}]
                 })
 
-            except Exception as error:
-                st.error("ABLEX AI could not respond. Please try again.")
-                st.caption(str(error))
-                st.session_state.messages.pop()
+            with st.chat_message("assistant"):
+                with st.spinner("ABLEX AI is thinking..."):
+                    response = client.models.generate_content(
+                        model="gemini-3.5-flash-lite",
+                        contents=conversation,
+                        config={
+                            "system_instruction": (
+                                "You are ABLEX AI, a friendly, "
+                                "intelligent and responsible AI assistant. "
+                                "Give clear, helpful and accurate answers. "
+                                + language_instruction
+                            )
+                        }
+                    )
+
+                    answer = response.text or (
+                        "Sorry, I couldn't generate a response."
+                    )
+                    st.markdown(answer)
+
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": answer
+            })
+
+        except Exception as e:
+            st.error("Sorry, ABLEX AI could not respond. Please try again.")
+            st.caption(str(e))
+            st.session_state.messages.pop()
 
 
